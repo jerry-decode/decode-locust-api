@@ -190,7 +190,7 @@ async def login(request: Request, userInfo: Login):
             "username": userInfo.username,
             "password": userInfo.password
         }
-        res = requests.post(url,json=data).json()
+        res = requests.post(url, json=data).json()
         if res["retCode"] == "0":
             data = {"access_token": "sfsdfsdfgsdsdggsgsdfgadsfgsdg", "token_type": "bearer"}
             return resp_200(data=data)
@@ -398,6 +398,30 @@ async def add_project(file: UploadFile = File(...)):
     # t.setDaemon(True)
     # t.start()
     # t.join()
+
+
+# 下载项目
+@locust_app.get("/project/download", summary="下载项目")
+async def download_project(request: Request, path: str):
+    try:
+        if not os.path.exists(path):
+            return resp_401(message="项目不存在")
+        # 压缩项目
+        filename = path.split("/")[-1]
+        cmd = f"cd {path.replace(f"/{filename}", "")} && sudo zip -r {filename}.zip {filename}"
+        stdout, returncode = execute_command(cmd)
+        # 返回压缩包
+        if returncode == 0:
+            return FileResponse(f"{path}.zip", filename=f"{filename}.zip",
+                                media_type="file/zip")
+        else:
+            return resp_401(message="下载失败，请重试！")
+    except Exception:
+        return resp_401(message="下载失败，请重试！")
+    # 清理压缩包
+    finally:
+        cmd = f"cd {path.replace(f"/{filename}", "")} && sudo rm -rf {filename}.zip"
+        execute_command(cmd)
 
 
 # 保存报告
