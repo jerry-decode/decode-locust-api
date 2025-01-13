@@ -418,10 +418,11 @@ async def download_project(request: Request, path: str):
             return resp_401(message="下载失败，请重试！")
     except Exception:
         return resp_401(message="下载失败，请重试！")
-    # 清理压缩包
-    finally:
-        cmd = f"cd {path.replace(f"/{filename}", "")} && sudo rm -rf {filename}.zip"
-        execute_command(cmd)
+    # # 清理压缩包
+    # finally:
+    #     time.sleep(30)
+    #     cmd = f"cd {path.replace(f"/{filename}", "")} && sudo rm -rf {filename}.zip"
+    #     execute_command(cmd)
 
 
 # 保存报告
