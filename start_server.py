@@ -179,9 +179,8 @@ def stop_locust():
                 break
     return stdout, returncode
 
-    # 启动服务
 
-
+# 登录
 @locust_app.post("/login", summary="登录")
 async def login(request: Request, userInfo: Login):
     try:
@@ -248,6 +247,21 @@ async def stop_server(request: Request, prj_dir: str):
         return Exception
 
 
+# 校验服务是否启动
+@locust_app.get("/servers/check", summary="校验服务是否启动")
+async def check_server(request: Request):
+    try:
+        command = "docker ps | grep locust"
+        stdout, returncode = execute_command(command)
+        do_li = stdout.split("\n")
+        if do_li and do_li[0]:
+            return resp_200()
+        else:
+            return resp_401(message="请先启动服务！")
+    except Exception:
+        return Exception
+
+
 # 停止所有服务
 @locust_app.post("/servers/stop/all", summary="停止所有服务")
 async def stop_all(request: Request):
@@ -258,7 +272,7 @@ async def stop_all(request: Request):
         else:
             return resp_401(message=stdout)
     except Exception:
-        return Exception
+        return resp_401(message="执行失败，请重试！")
 
 
 # 项目列表
@@ -429,7 +443,8 @@ async def download_project(request: Request, path: str):
 @locust_app.post("/project/report/save", summary="保存报告")
 async def save_project(request: Request, prj_name: str):
     try:
-        name = time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime())
+        timestamp = time.time() + 8 * 3600
+        name = time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime(timestamp))
         # 创建报告文件夹
         file_location = f"{PROJECT_DIR}/reports"
         if not os.path.isdir(file_location):
