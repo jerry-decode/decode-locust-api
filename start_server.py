@@ -110,7 +110,7 @@ def get_dir(prj_dir):
             path = f"{prj_dir}/{item}"
             if os.path.isdir(path):
                 itm = get_dir(path)
-            if ".zip" not in item:
+            if ".zip" not in item and not item.startswith("."):
                 items.append(
                     {"key": str(uuid.uuid4()), "title": item, "path": path, "parentPath": prj_dir,
                      "children": itm if itm else "",
@@ -290,8 +290,7 @@ async def project_list(request: Request, file_name: str = ""):
             return resp_401(message="文件不存在！")
         items = get_dir(prj_dir)
         items = [item for item in items if
-                 os.path.isdir(item["path"]) and item["title"] not in ["__pycache__", "reports"] and not item[
-                     "title"].startswith(".")]
+                 os.path.isdir(item["path"]) and item["title"] not in ["__pycache__", "reports"]]
         return resp_200(data=items)
     except Exception:
         return Exception
