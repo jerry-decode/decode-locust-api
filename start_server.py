@@ -290,7 +290,8 @@ async def project_list(request: Request, file_name: str = ""):
             return resp_401(message="文件不存在！")
         items = get_dir(prj_dir)
         items = [item for item in items if
-                 os.path.isdir(item["path"]) and item["title"] not in ["__pycache__", "reports"]]
+                 os.path.isdir(item["path"]) and item["title"] not in ["__pycache__", "reports"] and not item[
+                     "title"].startswith(".")]
         return resp_200(data=items)
     except Exception:
         return Exception
