@@ -21,7 +21,7 @@ from fastapi import APIRouter, Request, FastAPI, UploadFile, File
 from pydantic import BaseModel, constr, Field, AnyHttpUrl
 from starlette import status
 from starlette.responses import JSONResponse, FileResponse
-
+from pydantic import BaseModel
 from configparser import ConfigParser
 
 PROJECT_DIR = os.getcwd()
@@ -91,6 +91,11 @@ def __jsonStr__(data: Union[list, dict, str, type]):
     return data
 
 
+class EditFile(BaseModel):
+    path: str
+    content: str
+
+
 # 获取目录树
 def get_dir(prj_dir):
     # 获取当前目录下的所有文件和文件夹
@@ -105,10 +110,11 @@ def get_dir(prj_dir):
             path = f"{prj_dir}/{item}"
             if os.path.isdir(path):
                 itm = get_dir(path)
-            items.append(
-                {"key": str(uuid.uuid4()), "title": item, "path": path, "parentPath": prj_dir,
-                 "children": itm if itm else "",
-                 "isdir": 1 if os.path.isdir(path) else 0, "isprj": 1 if prj_dir == PROJECT_DIR else 0})
+            if ".zip" not in item:
+                items.append(
+                    {"key": str(uuid.uuid4()), "title": item, "path": path, "parentPath": prj_dir,
+                     "children": itm if itm else "",
+                     "isdir": 1 if os.path.isdir(path) else 0, "isprj": 1 if prj_dir == PROJECT_DIR else 0})
     return items
 
 
@@ -302,6 +308,35 @@ async def delete_file(request: Request, file_path: str, ):
         resp_401(message="文件不存在！")
 
 
+# 文件详情
+@locust_app.get("/project/file/detail", summary="文件详情")
+async def project_list(request: Request, path: str = ""):
+    try:
+        if os.path.exists(path):
+            with open(path, "r", encoding='utf-8') as file:
+                content = file.read()  # 读取文件内容
+            return resp_200(data=content)
+        else:
+            return resp_401(message=f"{path}文件不存在!")
+    except Exception:
+        return Exception
+
+
+# 修改文件
+@locust_app.post("/project/file/edit", summary="修改文件")
+async def upload_file(request: Request, data: EditFile):
+    try:
+        if os.path.exists(data.path):
+            # 使用aiofiles异步写入文件
+            with open(data.path, "w") as file:
+                file.write(data.content)  # 异步写入文件内容
+                return resp_200()
+        else:
+            return resp_401(message="请输入正确的文件路径！")
+    except Exception:
+        return Exception
+
+
 # 上传更新文件
 @locust_app.post("/project/file/upload", summary="更新文件")
 async def upload_file(request: Request, file_path: str, file: UploadFile = File(...)):
@@ -486,8 +521,21 @@ async def project_list(request: Request):
 # 下载报告
 @locust_app.get("/project/report/download", summary="下载报告")
 async def download_report(request: Request, path: str):
-    return FileResponse(path, filename=path.split("/")[-1],
-                        media_type="file/html" if path.split("/")[-1] == "csv" else "file/csv")
+    if os.path.isdir(path):
+        # 压缩项目
+        filename = path.split("/")[-1]
+        name = f"{filename}.zip"
+        cmd = f"cd {path.replace(f"/{filename}", "")} && sudo zip -r {name} {filename}"
+        stdout, returncode = execute_command(cmd)
+        # 返回压缩包
+        if returncode == 0:
+            return FileResponse(f"{path}.zip", filename=name,
+                                media_type="file/zip")
+        else:
+            return resp_401(message="下载失败，请重试！")
+    else:
+        return FileResponse(path, filename=path.split("/")[-1],
+                            media_type="file/html" if path.split("/")[-1] == "csv" else "file/csv")
 
 
 # 查看报告
