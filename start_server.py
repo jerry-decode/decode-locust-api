@@ -13,7 +13,7 @@ from typing import Union, List
 
 import requests
 from starlette.middleware.cors import CORSMiddleware
-
+from fastapi.staticfiles import StaticFiles
 import aiofiles
 import uvicorn
 import uuid
@@ -550,7 +550,8 @@ def create_app():
     :return:
     """
     app = FastAPI(title="LOCUST服务", version="1.0", description="")
-    app.include_router(locust_app, prefix='/api', tags=['LOCUS服务'])
+    app.include_router(locust_app, prefix='/api', tags=['LOCUST服务'])
+    app.mount("/reports", StaticFiles(directory="reports", html=True), name="reports")
     # 跨域设置
     register_cors(app)
     return app
