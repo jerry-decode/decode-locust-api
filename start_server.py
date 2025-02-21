@@ -211,7 +211,7 @@ async def start_server(request: Request, prj_dir: str):
     conf_path = f"{PROJECT_DIR}/{prj_dir}/config/locust.conf"
     config.read(conf_path)
     num = config['works']['works']
-    command = [f"cd {PROJECT_DIR}/{prj_dir}/docker && docker-compose up --scale worker={num} -d"]
+    command = [f"cd {PROJECT_DIR}/{prj_dir}/docker && sudo docker-compose up --scale worker={num} -d"]
     try:
         stop_locust()
         stdout, returncode = execute_command(command)
@@ -228,7 +228,7 @@ async def start_server(request: Request, prj_dir: str):
 async def restart_server(request: Request):
     try:
         # stop_locust()
-        command = ["docker-compose restart"]
+        command = ["sudo docker-compose restart"]
         stdout, returncode = execute_command(command)
         if returncode == 0:
             return resp_200()
@@ -243,7 +243,7 @@ async def restart_server(request: Request):
 async def stop_server(request: Request, prj_dir: str):
     try:
         # stop_locust()
-        command = [f"cd {PROJECT_DIR}/{prj_dir}/docker && docker-compose stop"]
+        command = [f"cd {PROJECT_DIR}/{prj_dir}/docker && sudo docker-compose stop"]
         stdout, returncode = execute_command(command)
         if returncode == 0:
             return resp_200()
@@ -257,7 +257,7 @@ async def stop_server(request: Request, prj_dir: str):
 @locust_app.get("/servers/check", summary="校验服务是否启动")
 async def check_server(request: Request):
     try:
-        command = "docker ps | grep locust"
+        command = "sudo docker ps | grep locust"
         stdout, returncode = execute_command(command)
         do_li = stdout.split("\n")
         if do_li and do_li[0]:
@@ -310,7 +310,7 @@ async def delete_file(request: Request, file_path: str, ):
 
 # 文件详情
 @locust_app.get("/project/file/detail", summary="文件详情")
-async def project_list(request: Request, path: str = ""):
+async def file_detail(request: Request, path: str = ""):
     try:
         if os.path.exists(path):
             with open(path, "r", encoding='utf-8') as file:
@@ -324,7 +324,7 @@ async def project_list(request: Request, path: str = ""):
 
 # 修改文件
 @locust_app.post("/project/file/edit", summary="修改文件")
-async def upload_file(request: Request, data: EditFile):
+async def edit_file(request: Request, data: EditFile):
     try:
         if os.path.exists(data.path):
             # 使用aiofiles异步写入文件
@@ -476,19 +476,25 @@ async def download_project(request: Request, path: str):
 
 # 保存报告
 @locust_app.post("/project/report/save", summary="保存报告")
-async def save_project(request: Request, prj_name: str):
+async def save_project(request: Request, prj_name: str, rep_name: str = ""):
     try:
-        timestamp = time.time() + 8 * 3600
-        name = time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime(timestamp))
+        if not rep_name:
+            timestamp = time.time() + 8 * 3600
+            name = time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime(timestamp))
+        else:
+            name = rep_name
         # 创建报告文件夹
         file_location = f"{PROJECT_DIR}/reports"
         if not os.path.isdir(file_location):
             os.mkdir(file_location)
+            # execute_command(f"sudo mkdir {file_location}")
         path_report = f"{file_location}/{prj_name}_reports"
         if not os.path.isdir(path_report):
+            # execute_command(f"sudo mkdir {path_report}")
             os.mkdir(path_report)
         path_report = f"{file_location}/{prj_name}_reports/{name}"
         if not os.path.isdir(path_report):
+            # execute_command(f"sudo mkdir {path_report}")
             os.mkdir(path_report)
         # 保存报告
         address = ["/stats/report?download=1&theme=dark", "/exceptions/csv", "/stats/failures/csv",
@@ -505,7 +511,7 @@ async def save_project(request: Request, prj_name: str):
 
 # 报告列表
 @locust_app.get("/project/report/list", summary="报告列表")
-async def project_list(request: Request):
+async def report_list(request: Request):
     try:
         report_dir = f"{PROJECT_DIR}/reports"
         if not os.path.isdir(report_dir):
