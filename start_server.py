@@ -196,8 +196,12 @@ async def login(request: Request, userInfo: Login):
             "password": userInfo.password
         }
         res = requests.post(url, json=data).json()
+        result = res["result"]
         if res["retCode"] == "0":
-            data = {"access_token": "sfsdfsdfgsdsdggsgsdfgadsfgsdg", "token_type": "bearer"}
+            data = {"access_token": "sfsdfsdfgsdsdggsgsdfgadsfgsdg", "token_type": "bearer",
+                    "accountStatus": result["accountStatus"], "createdAt": result["createdAt"],
+                    "mobile": result["mobile"],
+                    "name": result["name"], "email": result["email"]}
             return resp_200(data=data)
         else:
             return resp_401(message="账号或者密码错误！")
