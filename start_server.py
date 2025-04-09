@@ -385,7 +385,7 @@ async def setting_list(request: Request):
     try:
         items = []
         for item in os.listdir(PROJECT_DIR):
-            if "LOCUST" in item and os.path.exists(f"{PROJECT_DIR}/{item}/config/locust.conf"):
+            if os.path.exists(f"{PROJECT_DIR}/{item}/config/locust.conf"):
                 config = ConfigParser()
                 conf_path = f"{PROJECT_DIR}/{item}/config/locust.conf"
                 config.read(conf_path)
