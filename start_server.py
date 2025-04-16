@@ -6,10 +6,12 @@
 # @Author = jerry
 import json
 import os
+import re
 import subprocess
 import time
 from datetime import datetime
 from typing import Union, List
+from urllib import parse
 
 import requests
 from starlette.middleware.cors import CORSMiddleware
@@ -96,6 +98,11 @@ class EditFile(BaseModel):
     content: str
 
 
+class EditProjectName(BaseModel):
+    old_path_name: str
+    new_name: str
+
+
 # 获取目录树
 def get_dir(prj_dir):
     # 获取当前目录下的所有文件和文件夹
@@ -111,9 +118,24 @@ def get_dir(prj_dir):
             if os.path.isdir(path):
                 itm = get_dir(path)
             if ".zip" not in item and not item.startswith("."):
+                start_time = ""
+                end_time = ""
+                if item == "report.html":
+                    with open(path, 'r', encoding='utf-8-sig') as f:
+                        content = f.read()
+                        pattern = r'"start_time": "\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z"'
+                        match = re.findall(pattern, content)
+                        if match:
+                            start_time = re.findall(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z', match[0])[0]
+                        pattern = r'"end_time": "\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z"'
+                        match = re.findall(pattern, content)
+                        if match:
+                            end_time = re.findall(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z', match[0])[0]
                 items.append(
                     {"key": str(uuid.uuid4()), "title": item, "path": path, "parentPath": prj_dir,
                      "children": itm if itm else "",
+                     "startTime": start_time,
+                     "endTime": end_time,
                      "isdir": 1 if os.path.isdir(path) else 0, "isprj": 1 if prj_dir == PROJECT_DIR else 0})
     return items
 
@@ -546,6 +568,22 @@ async def download_report(request: Request, path: str):
     else:
         return FileResponse(path, filename=path.split("/")[-1],
                             media_type="file/html" if path.split("/")[-1] == "csv" else "file/csv")
+
+
+# 修改报告名字
+@locust_app.post("/project/report/update/name", summary="更新报告名字")
+async def report_update_name(request: Request, data: EditProjectName):
+    if os.path.isdir(data.old_path_name):
+        filename = data.old_path_name.split("/")[-1]
+        path = data.old_path_name.replace(filename, "")
+        cmd = f"cd {path} && sudo mv {filename} {data.new_name}"
+        stdout, returncode = execute_command(cmd)
+        if returncode == 0:
+            return resp_200()
+        else:
+            resp_401(message="修改失败！")
+    else:
+        resp_401(message="报告不存在！")
 
 
 # 查看报告
