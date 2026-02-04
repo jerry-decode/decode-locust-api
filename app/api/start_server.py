@@ -6,25 +6,24 @@
 # @Author = jerry
 import json
 import os
-import re
 import subprocess
 import time
+import uuid
+from configparser import ConfigParser
 from datetime import datetime
 from typing import Union, List
-from urllib import parse
 
-import requests
-from starlette.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 import aiofiles
+import redis
+import requests
 import uvicorn
-import uuid
-from fastapi import APIRouter, Request, FastAPI, UploadFile, File
-from pydantic import BaseModel, constr, Field, AnyHttpUrl
-from starlette import status
-from starlette.responses import JSONResponse, FileResponse
+from fastapi import APIRouter, Request, FastAPI, UploadFile, File, HTTPException
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from configparser import ConfigParser
+from pydantic import constr, Field, AnyHttpUrl
+from starlette import status
+from starlette.middleware.cors import CORSMiddleware
+from starlette.responses import JSONResponse, FileResponse
 
 PROJECT_DIR = os.getcwd()
 
@@ -32,26 +31,6 @@ if not os.path.exists(PROJECT_DIR):
     os.mkdir(PROJECT_DIR)
 locust_app = APIRouter()
 BACKEND_CORS_ORIGINS: List[AnyHttpUrl] = ['*']
-
-
-def register_cors(app: FastAPI):
-    """
-    支持跨域
-
-    貌似发现了一个bug
-    https://github.com/tiangolo/fastapi/issues/133
-
-    :param app:
-    :return:
-    """
-    if BACKEND_CORS_ORIGINS:
-        app.add_middleware(
-            CORSMiddleware,
-            allow_origins=["*"],
-            allow_credentials=True,
-            allow_methods=["*"],
-            allow_headers=["*"],
-        )
 
 
 class DateEncoder(json.JSONEncoder):
@@ -98,11 +77,6 @@ class EditFile(BaseModel):
     content: str
 
 
-class EditProjectName(BaseModel):
-    old_path_name: str
-    new_name: str
-
-
 # 获取目录树
 def get_dir(prj_dir):
     # 获取当前目录下的所有文件和文件夹
@@ -118,24 +92,9 @@ def get_dir(prj_dir):
             if os.path.isdir(path):
                 itm = get_dir(path)
             if ".zip" not in item and not item.startswith("."):
-                start_time = ""
-                end_time = ""
-                if item == "report.html":
-                    with open(path, 'r', encoding='utf-8-sig') as f:
-                        content = f.read()
-                        pattern = r'"start_time": "\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z"'
-                        match = re.findall(pattern, content)
-                        if match:
-                            start_time = re.findall(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z', match[0])[0]
-                        pattern = r'"end_time": "\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z"'
-                        match = re.findall(pattern, content)
-                        if match:
-                            end_time = re.findall(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z', match[0])[0]
                 items.append(
                     {"key": str(uuid.uuid4()), "title": item, "path": path, "parentPath": prj_dir,
                      "children": itm if itm else "",
-                     "startTime": start_time,
-                     "endTime": end_time,
                      "isdir": 1 if os.path.isdir(path) else 0, "isprj": 1 if prj_dir == PROJECT_DIR else 0})
     return items
 
@@ -207,28 +166,6 @@ def stop_locust():
                 break
     return stdout, returncode
 
-
-# 登录
-@locust_app.post("/login", summary="登录")
-async def login(request: Request, userInfo: Login):
-    try:
-        url = "https://decodeex-api.dev.decodebackoffice.com/user/admin/login"
-        data = {
-            "username": userInfo.username,
-            "password": userInfo.password
-        }
-        res = requests.post(url, json=data).json()
-        result = res["result"]
-        if res["retCode"] == "0":
-            data = {"access_token": "sfsdfsdfgsdsdggsgsdfgadsfgsdg", "token_type": "bearer",
-                    "accountStatus": result["accountStatus"], "createdAt": result["createdAt"],
-                    "mobile": result["mobile"],
-                    "name": result["name"], "email": result["email"]}
-            return resp_200(data=data)
-        else:
-            return resp_401(message="账号或者密码错误！")
-    except Exception:
-        return Exception
 
 
 @locust_app.post("/servers/start", summary="启动服务")
@@ -407,7 +344,7 @@ async def setting_list(request: Request):
     try:
         items = []
         for item in os.listdir(PROJECT_DIR):
-            if os.path.exists(f"{PROJECT_DIR}/{item}/config/locust.conf"):
+            if "LOCUST" in item and os.path.exists(f"{PROJECT_DIR}/{item}/config/locust.conf"):
                 config = ConfigParser()
                 conf_path = f"{PROJECT_DIR}/{item}/config/locust.conf"
                 config.read(conf_path)
@@ -570,22 +507,6 @@ async def download_report(request: Request, path: str):
                             media_type="file/html" if path.split("/")[-1] == "csv" else "file/csv")
 
 
-# 修改报告名字
-@locust_app.post("/project/report/update/name", summary="更新报告名字")
-async def report_update_name(request: Request, data: EditProjectName):
-    if os.path.isdir(data.old_path_name):
-        filename = data.old_path_name.split("/")[-1]
-        path = data.old_path_name.replace(filename, "")
-        cmd = f"cd {path} && sudo mv {filename} {data.new_name}"
-        stdout, returncode = execute_command(cmd)
-        if returncode == 0:
-            return resp_200()
-        else:
-            resp_401(message="修改失败！")
-    else:
-        resp_401(message="报告不存在！")
-
-
 # 查看报告
 @locust_app.get("/project/report/detail", summary="查看报告")
 async def detail(request: Request, path: str):
@@ -606,5 +527,9 @@ def create_app():
 
 
 app = create_app()
+# 注册全局异常
+register_exception(app)
+# 注册全局Redis
+# register_redis(app)
 if __name__ == '__main__':
     uvicorn.run('start_server:app', host='127.0.0.1', port=8000, reload=True)
